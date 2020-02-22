@@ -1,0 +1,170 @@
+<script src='https://cdn.rawgit.com/naptha/tesseract.js/0.2.0/dist/tesseract.js'></script>
+
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+      .canvasContainer {
+        overflow-y: scroll;
+        display: inline-block;
+      }
+
+    </style>
+  </head>
+
+  <body>
+
+    <input type="file" id="fileReader">
+    Threshold<input type="range" min="0" max="255" id="sliderThreshold">
+    <textarea id="image-text"></textarea>
+    <br /><br />
+
+    <div class="canvasContainer">
+      <canvas id="outputCanvas"></canvas>
+    </div>
+    <div class="canvasContainer">
+      <canvas id="inputCanvas"></canvas>
+    </div>
+
+
+    <progress id="progressbar" min="0" max="1" value="0" />
+
+    <script src="./index.js"></script>
+  </body>
+
+</html>
+
+<script>
+  const fileReader = document.getElementById('fileReader');
+  const sliderThreshold = document.getElementById('sliderThreshold');
+  const inputCanvas = document.getElementById('inputCanvas');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const inputCtx = inputCanvas.getContext('2d');
+  const outputCtx = outputCanvas.getContext('2d');
+
+  var speisekarte;
+
+  sliderThreshold.addEventListener('input', e => displayResult(e.target.value));
+
+
+  fileReader.addEventListener('change', inputEvent => {
+    let reader = new FileReader();
+    reader.addEventListener('load', readerEvent => {
+      let img = new Image();
+      img.addEventListener('load', () => {
+        inputCanvas.width = img.width;
+        inputCanvas.height = img.height;
+        inputCtx.drawImage(img, 0, 0);
+
+        displayResult(50);
+      });
+      img.src = readerEvent.target.result;
+    });
+    reader.readAsDataURL(inputEvent.target.files[0]);
+  });
+
+
+
+  function displayResult(threshold) {
+
+    let imageData = inputCtx.getImageData(0, 0, inputCanvas.width, inputCanvas.height);
+    let data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      // Convert RGB values to grayscale (you can look that up)
+      let grayscale = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+
+      // Check if the value is obove or below the threshold value and return white or black
+      let finalColor = grayscale < threshold ? 0 : 255;
+
+      // Asign the color
+      data[i] = finalColor;
+      data[i + 1] = finalColor;
+      data[i + 2] = finalColor;
+    }
+
+    // Put the data into another canvas so we 
+    outputCanvas.width = imageData.width;
+    outputCanvas.height = imageData.height;
+    outputCtx.putImageData(imageData, 0, 0);
+
+    Tesseract.recognize(imageData, {
+        lang: 'deu'
+      })
+      .progress(function(message) {
+        document.getElementById('progressbar').value = message.progress;
+        //console.log(message);
+      })
+      .then(function(result) {
+        var contentArea = document.getElementById('image-text');
+
+
+
+
+
+        var text = result.text.split(/\r?\n/);
+        var endText = " ";
+
+
+        for (i = 0; i < 20; i++) {
+          var weekPos = text[i].search("Woc");
+          if (weekPos != -1) {
+            var weekString = text[i].substring(0, weekPos);
+            weekString = weekString.replace(".", "");
+            weekString = weekString.replace(" ", "");
+            weekString = weekString.replace("*", "");
+            weekString = weekString.replace(",", "");
+            //console.log(weekString + ". Woche\n");
+            endText = endText.concat(weekString + ". Woche\n");
+            break;
+          }
+        }
+
+        var weekDays = ['onta', 'iensta', 'ittwoc', 'onnersta', 'reita']
+
+        for (d = 0; d < weekDays.length; d++) {
+          var day = weekDays[d];
+          for (i = 0; i < text.length; i++) {
+            var dayPos = text[i].search(day);
+            if (dayPos != -1) {
+              var dayString = text[i].substring(dayPos - 1, text[i].search("20") + 4);
+              //console.log(dayString);
+              endText = endText.concat(dayString + "\n");
+              for (n = i + 1; n < Math.min(i + 10, text.length); n++) {
+                if (text[n].search(/weekDays[0]|weekDays[1]|weekDays[2]|weekDays[3]|weekDays[4]/) != -1) console.log("test");
+                if (text[n].search('usatz') != -1) break;
+                else if (text[n].length > 17) {
+                  dishstring = text[n].substring(0, text[n].search("€") + 1);
+                  //console.log(dishstring);
+                  endText = endText.concat(dishstring + "\n");
+                  break;
+                }
+              }
+
+
+
+
+              break;
+            }
+          }
+        }
+        console.log(endText);
+        contentArea.innerHTML = endText;
+
+
+
+
+      })
+      .catch(function(err) {
+        //console.error(err);
+      });
+  }
+
+  //outputCanvas.style.display="none";
+  inputCanvas.style.display = "none";
+
+</script>
